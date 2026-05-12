@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>KIS – Upravljanje Kriznim Situacijama</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #8a9bb0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* HEADER */
+    header {
+      height: 44px;
+      background: #131924;
+      border-bottom: 1px solid #1c2a3a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      flex-shrink: 0;
+    }
+    .h-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #c8d6e5;
+    }
+    .h-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 11px;
+    }
+    .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #263547;
+      display: inline-block;
+      margin-right: 5px;
+    }
+    .dot.live { background: #4caf50; animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* LAYOUT */
+    .body { display:flex; flex:1; overflow:hidden; }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 260px;
+      background: #131924;
+      border-right: 1px solid #1c2a3a;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* Stats row */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid #1c2a3a;
+      flex-shrink: 0;
+    }
+    .stat {
+      padding: 10px 0;
+      text-align: center;
+      border-right: 1px solid #1c2a3a;
+    }
+    .stat:last-child { border-right: none; }
+    .stat-n { font-size: 18px; font-weight: 700; color: #c8d6e5; }
+    .stat-l { font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: #263547; margin-top: 2px; }
+
+    /* Sections */
+    .sec {
+      display: flex;
+      flex-direction: column;
+      border-bottom: 1px solid #1c2a3a;
+      overflow: hidden;
+    }
+    .sec-h {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.4px;
+      text-transform: uppercase;
+      color: #263547;
+      padding: 8px 14px 6px;
+      flex-shrink: 0;
+    }
+    .sec-body { overflow-y: auto; flex: 1; }
+
+    /* List items */
+    .item {
+      padding: 8px 14px;
+      border-bottom: 1px solid #0d1420;
+      cursor: pointer;
+      transition: background .1s;
+    }
+    .item:hover { background: #192130; }
+    .item:last-child { border-bottom: none; }
+    .item-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:2px; }
+    .item-id { font-size: 12px; font-weight: 600; color: #a8bdd0; }
+    .item-sub { font-size: 11px; color: #263547; }
+
+    .badge {
+      font-size: 9px; font-weight: 700;
+      padding: 2px 6px; border-radius: 2px;
+      letter-spacing: .4px;
+    }
+    .b-red    { background:rgba(239,83,80,.15);  color:#ef5350; }
+    .b-blue   { background:rgba(79,195,247,.12); color:#4fc3f7; }
+    .b-purple { background:rgba(206,147,216,.12);color:#ce93d8; }
+    .b-gray   { background:rgba(38,53,71,.5);    color:#3d5268; }
+    .b-green  { background:rgba(102,187,106,.12);color:#66bb6a; }
+    .b-orange { background:rgba(255,167,38,.12); color:#ffa726; }
+
+    .empty { padding: 10px 14px; font-size: 11px; color: #1e2d3d; }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1c2a3a; border-radius: 2px; }
+
+    /* MAP */
+    #map { flex: 1; }
+
+    /* Smooth marker movement */
+    .leaflet-marker-icon { transition: transform 0.28s linear !important; }
+
+    /* Popup */
+    .leaflet-popup-content-wrapper {
+      background: #131924 !important;
+      border: 1px solid #1c2a3a !important;
+      border-radius: 4px !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,.7) !important;
+    }
+    .leaflet-popup-tip { background: #131924 !important; }
+    .leaflet-popup-tip-container { display:none; }
+    .leaflet-popup-content {
+      font-family: 'Segoe UI', system-ui, sans-serif !important;
+      font-size: 12px !important;
+      line-height: 1.6 !important;
+      margin: 10px 13px !important;
+      color: #8a9bb0 !important;
+    }
+    .p-title { font-size:13px; font-weight:600; color:#c8d6e5; margin-bottom:6px; }
+    .p-row b { color:#7a99b4; }
+    .leaflet-popup-close-button { color: #263547 !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="h-title">Komandno-Upravljački Informacioni Sistem</div>
+  <div class="h-right">
+    <span id="ts" style="color:#263547">—</span>
+    <span><span class="dot" id="dot"></span><span id="clbl">Van mreže</span></span>
+  </div>
+</header>
+
+<div class="body">
+<div class="sidebar">
+
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="s-t">0</div><div class="stat-l">Ukupno</div></div>
+    <div class="stat"><div class="stat-n" id="s-n">0</div><div class="stat-l">Šum</div></div>
+    <div class="stat"><div class="stat-n" id="s-i">0</div><div class="stat-l">Incidenti</div></div>
+    <div class="stat"><div class="stat-n" id="s-r">0</div><div class="stat-l">Rešeno</div></div>
+  </div>
+
+  <!-- Incidenti -->
+  <div class="sec" style="max-height:200px">
+    <div class="sec-h">Aktivni incidenti</div>
+    <div class="sec-body" id="inc-list"><div class="empty">Nema aktivnih incidenata</div></div>
+  </div>
+
+  <!-- Vozila -->
+  <div class="sec" style="flex-shrink:0">
+    <div class="sec-h">Vozila</div>
+    <div id="veh-list"></div>
+  </div>
+
+  <!-- Rešeni -->
+  <div class="sec" style="max-height:160px">
+    <div class="sec-h">Rešeni incidenti</div>
+    <div class="sec-body" id="res-list"><div class="empty">Nema rešenih</div></div>
+  </div>
+
+  <!-- Šum -->
+  <div class="sec" style="flex:1;min-height:0">
+    <div class="sec-h">Odbačene prijave (šum)</div>
+    <div class="sec-body" id="noise-list"><div class="empty">Nema</div></div>
+  </div>
+
+</div>
+
+<div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── MAPA ──────────────────────────────────────────────────────────────────────
+const map = L.map('map').setView([45.257, 19.840], 13);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+}).addTo(map);
+
+const clLayer  = L.layerGroup().addTo(map);
+const incLayer = L.layerGroup().addTo(map);
+const vehLayer = L.layerGroup().addTo(map);
+
+// Marker references - nikad ne brisemo, samo azuriramo
+const clMk  = {};   // cluster markers
+const incMk = {};   // incident markers
+const vehMk = {};   // vehicle markers
+
+const VEH_COLOR = { 'V-101': '#4fc3f7', 'V-102': '#ce93d8' };
+
+// ── KLASTERI ──────────────────────────────────────────────────────────────────
+function syncClusters(clusters) {
+  const ids = new Set(clusters.map(c => c.id));
+
+  // Ukloni nestale
+  for (const id of Object.keys(clMk)) {
+    if (!ids.has(id)) { clMk[id].circle.remove(); clMk[id].dot.remove(); delete clMk[id]; }
+  }
+
+  clusters.filter(c => !c.verified).forEach(c => {
+    const ll = [c.lat, c.lon];
+    if (clMk[c.id]) {
+      clMk[c.id].circle.setLatLng(ll);
+      clMk[c.id].dot.setLatLng(ll);
+    } else {
+      const circle = L.circle(ll, {
+        radius: 120, color: '#2a3f55', weight: 1,
+        fillColor: '#2a3f55', fillOpacity: 0.15, dashArray: '4,4'
+      }).addTo(clLayer);
+
+      const icon = L.divIcon({
+        html: `<div style="width:16px;height:16px;border-radius:50%;background:#13192a;border:1px solid #2a3f55;display:flex;align-items:center;justify-content:center;font-size:9px;color:#2a3f55;font-weight:700">${c.report_count}</div>`,
+        className:'', iconSize:[16,16], iconAnchor:[8,8]
+      });
+      const dot = L.marker(ll, { icon }).addTo(clLayer);
+      clMk[c.id] = { circle, dot };
+    }
+
+    // Osvezi broj
+    const el = clMk[c.id].dot.getElement();
+    if (el) el.querySelector('div').textContent = c.report_count;
+  });
+
+  // Ukloni verificirane klastere sa mape (oni postaju incidenti)
+  clusters.filter(c => c.verified).forEach(c => {
+    if (clMk[c.id]) { clMk[c.id].circle.remove(); clMk[c.id].dot.remove(); delete clMk[c.id]; }
+  });
+}
+
+// ── INCIDENTI ─────────────────────────────────────────────────────────────────
+function incPopup(inc) {
+  const st = { ACTIVE:'Aktivan', RESOLVED:'Rešen' }[inc.status] || inc.status;
+  return `<div class="p-title">Incident ${inc.id}</div>
+          <div class="p-row">Prijava: <b>${inc.report_count}</b></div>
+          <div class="p-row">Status: <b>${st}</b></div>
+          <div class="p-row">Vreme: <b>${inc.verified_at?.slice(11,19)||'—'}</b></div>`;
+}
+
+function syncIncidents(incidents) {
+  const activeIds = new Set(incidents.filter(i => i.status==='ACTIVE').map(i => i.id));
+
+  // Ukloni rešene
+  for (const id of Object.keys(incMk)) {
+    if (!activeIds.has(id)) { incMk[id].circle.remove(); incMk[id].marker.remove(); delete incMk[id]; }
+  }
+
+  incidents.filter(i => i.status==='ACTIVE').forEach(inc => {
+    const ll = [inc.lat, inc.lon];
+
+    if (incMk[inc.id]) {
+      incMk[inc.id].circle.setLatLng(ll);
+      incMk[inc.id].marker.setLatLng(ll);
+      incMk[inc.id].marker.getPopup()?.setContent(incPopup(inc));
+    } else {
+      const circle = L.circle(ll, {
+        radius: 180, color: '#ef5350', weight: 1.5,
+        fillColor: '#ef5350', fillOpacity: 0.08
+      }).addTo(incLayer);
+
+      const icon = L.divIcon({
+        html: `<div style="width:22px;height:22px;border-radius:3px;background:#1a0c0c;border:1.5px solid #ef5350;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#ef5350">${inc.report_count}</div>`,
+        className:'', iconSize:[22,22], iconAnchor:[11,11]
+      });
+
+      const marker = L.marker(ll, { icon })
+        .bindPopup(incPopup(inc), { autoClose:false, closeOnClick:false, keepInView:true })
+        .addTo(incLayer);
+
+      marker.on('popupopen',  () => marker._popupOpen = true);
+      marker.on('popupclose', () => marker._popupOpen = false);
+
+      incMk[inc.id] = { circle, marker };
+    }
+
+    // Osvezi broj i na markeru
+    const el = incMk[inc.id]?.marker.getElement();
+    if (el) el.querySelector('div').textContent = inc.report_count;
+  });
+
+  // Sidebar
+  const active = incidents.filter(i => i.status === 'ACTIVE')
+                          .sort((a,b) => b.report_count - a.report_count);
+  const el = document.getElementById('inc-list');
+  el.innerHTML = active.length
+    ? active.map(i => `
+        <div class="item" onclick="focusInc('${i.id}')">
+          <div class="item-top">
+            <span class="item-id">${i.id}</span>
+            <span class="badge b-red">${i.report_count} prijava</span>
+          </div>
+          <div class="item-sub">${i.verified_at?.slice(11,19)||'—'}</div>
+        </div>`).join('')
+    : '<div class="empty">Nema aktivnih incidenata</div>';
+}
+
+function focusInc(id) {
+  const m = incMk[id]?.marker;
+  if (!m) return;
+  map.setView(m.getLatLng(), 16, { animate: true });
+  m.openPopup();
+}
+
+// ── VOZILA ────────────────────────────────────────────────────────────────────
+function syncVehicles(vehicles) {
+  vehicles.forEach(v => {
+    const color = VEH_COLOR[v.id] || '#4fc3f7';
+    const pulse = v.status === 'EN_ROUTE'
+      ? `animation:blink 1.4s infinite;` : '';
+    const size  = v.status === 'ON_SCENE' ? 32 : 28;
+
+    const icon = L.divIcon({
+      html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#0f1117;border:2px solid ${color};display:flex;align-items:center;justify-content:center;${pulse}">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="${color}">
+                 <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99z"/>
+                 <circle cx="7.5" cy="14.5" r="1.5"/><circle cx="16.5" cy="14.5" r="1.5"/>
+               </svg>
+             </div>`,
+      className:'', iconSize:[size,size], iconAnchor:[size/2,size/2]
+    });
+
+    const popupHtml = `<div class="p-title">${v.name}</div>
+      <div class="p-row">Status: <b>${{STANDBY:'Čeka',EN_ROUTE:'U pokretu',ON_SCENE:'Na mestu'}[v.status]||v.status}</b></div>
+      <div class="p-row">Misija: <b>${v.mission||'—'}</b></div>`;
+
+    if (vehMk[v.id]) {
+      vehMk[v.id].setLatLng([v.lat, v.lon]).setIcon(icon);
+      vehMk[v.id].getPopup()?.setContent(popupHtml);
+    } else {
+      vehMk[v.id] = L.marker([v.lat, v.lon], { icon, zIndexOffset:1000 })
+        .bindPopup(popupHtml, { autoClose:false, closeOnClick:false })
+        .addTo(vehLayer);
+    }
+  });
+
+  // Sidebar
+  const el = document.getElementById('veh-list');
+  el.innerHTML = vehicles.map(v => {
+    const color  = VEH_COLOR[v.id] || '#4fc3f7';
+    const badgeCls = {STANDBY:'b-gray', EN_ROUTE:'b-blue', ON_SCENE:'b-green'}[v.status]||'b-gray';
+    const statusSr = {STANDBY:'Čeka', EN_ROUTE:'U pokretu', ON_SCENE:'Na mestu'}[v.status]||v.status;
+    return `
+      <div class="item" onclick="focusVeh('${v.id}')">
+        <div class="item-top">
+          <span class="item-id" style="color:${color}">${v.name}</span>
+          <span class="badge ${badgeCls}">${statusSr}</span>
+        </div>
+        <div class="item-sub">${v.mission ? `Incident: ${v.mission}` : 'Čeka zadatak'}</div>
+      </div>`;
+  }).join('');
+}
+
+function focusVeh(id) {
+  const m = vehMk[id];
+  if (!m) return;
+  map.setView(m.getLatLng(), 16, { animate: true });
+  m.openPopup();
+}
+
+// ── REŠENI ────────────────────────────────────────────────────────────────────
+function renderResolved(resolved) {
+  const el = document.getElementById('res-list');
+  el.innerHTML = resolved.length
+    ? resolved.map(r => `
+        <div class="item">
+          <div class="item-top">
+            <span class="item-id">${r.id}</span>
+            <span class="badge b-green">Rešen</span>
+          </div>
+          <div class="item-sub">${r.resolved_by} · ${r.resolved_at?.slice(11,19)||'—'}</div>
+        </div>`).join('')
+    : '<div class="empty">Nema rešenih</div>';
+}
+
+// ── ŠUM ───────────────────────────────────────────────────────────────────────
+function renderNoise(noise) {
+  const el = document.getElementById('noise-list');
+  el.innerHTML = noise.length
+    ? noise.map(n => `
+        <div class="item">
+          <div class="item-top">
+            <span class="item-id" style="font-size:11px">${n.report_id||n.cluster_id||'—'}</span>
+            <span class="badge b-gray">Odbačeno</span>
+          </div>
+          <div class="item-sub">${n.reason}</div>
+        </div>`).join('')
+    : '<div class="empty">Nema odbačenih prijava</div>';
+}
+
+// ── STATS ─────────────────────────────────────────────────────────────────────
+function renderStats(s) {
+  document.getElementById('s-t').textContent = s.total    || 0;
+  document.getElementById('s-n').textContent = s.noise    || 0;
+  document.getElementById('s-i').textContent = s.incidents|| 0;
+  document.getElementById('s-r').textContent = (document.getElementById('res-list')
+    .querySelectorAll('.item').length) || 0;
+}
+
+// ── WEBSOCKET ─────────────────────────────────────────────────────────────────
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => {
+    document.getElementById('dot').classList.add('live');
+    document.getElementById('clbl').textContent = 'Uživo';
+    setInterval(() => ws.readyState === 1 && ws.send('ping'), 25000);
+  };
+  ws.onclose = () => {
+    document.getElementById('dot').classList.remove('live');
+    document.getElementById('clbl').textContent = 'Van mreže';
+    setTimeout(connect, 3000);
+  };
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type !== 'update') return;
+
+    syncClusters(d.clusters   || []);
+    syncIncidents(d.incidents || []);
+    syncVehicles(d.vehicles   || []);
+    renderResolved(d.resolved || []);
+    renderNoise(d.noise       || []);
+    renderStats(d.stats       || {});
+
+    document.getElementById('ts').textContent =
+      new Date().toLocaleTimeString('sr-RS');
+  };
+}
+
+connect();
+</script>
+</body>
+</html>
