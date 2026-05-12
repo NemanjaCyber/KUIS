@@ -79,7 +79,7 @@
     }
     .stat:last-child { border-right: none; }
     .stat-n { font-size: 18px; font-weight: 700; color: #c8d6e5; }
-    .stat-l { font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: #263547; margin-top: 2px; }
+    .stat-l { font-size: 9px; letter-spacing: .8px; text-transform: uppercase; color: #5a7a8f; margin-top: 2px; font-weight: 600; }
 
     /* Sections */
     .sec {
@@ -209,18 +209,21 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // ── MAPA ──────────────────────────────────────────────────────────────────────
-const map = L.map('map').setView([45.257, 19.840], 13);
+const map = L.map('map').setView([43.3328, 21.9050], 13);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
   attribution: '© OpenStreetMap © CARTO', maxZoom: 19
 }).addTo(map);
 
 const clLayer  = L.layerGroup().addTo(map);
 const incLayer = L.layerGroup().addTo(map);
+const noiseLayer = L.layerGroup().addTo(map);
 const vehLayer = L.layerGroup().addTo(map);
 
 // Marker references - nikad ne brisemo, samo azuriramo
 const clMk  = {};   // cluster markers
 const incMk = {};   // incident markers
+const noiseMk = {}; // noise/sum markers
+const reportMk = {}; // sve prijave
 const vehMk = {};   // vehicle markers
 
 const VEH_COLOR = { 'V-101': '#4fc3f7', 'V-102': '#ce93d8' };
@@ -261,6 +264,35 @@ function syncClusters(clusters) {
   // Ukloni verificirane klastere sa mape (oni postaju incidenti)
   clusters.filter(c => c.verified).forEach(c => {
     if (clMk[c.id]) { clMk[c.id].circle.remove(); clMk[c.id].dot.remove(); delete clMk[c.id]; }
+  });
+}
+
+// ── SVE PRIJAVE ────────────────────────────────────────────────────────────────
+function syncAllReports(reports) {
+  const ids = new Set(reports.map((r, i) => i));
+
+  // Ukloni nestale
+  for (const id of Object.keys(reportMk)) {
+    if (!ids.has(parseInt(id))) { 
+      reportMk[id].remove(); 
+      delete reportMk[id]; 
+    }
+  }
+
+  reports.forEach((r, i) => {
+    const ll = [r.lat, r.lon];
+
+    if (!reportMk[i]) {
+      const icon = L.divIcon({
+        html: `<div style="width:6px;height:6px;border-radius:50%;background:#66bb6a;border:none;opacity:0.7"></div>`,
+        className:'', iconSize:[6,6], iconAnchor:[3,3]
+      });
+
+      reportMk[i] = L.marker(ll, { icon })
+        .addTo(clLayer);
+    } else {
+      reportMk[i].setLatLng(ll);
+    }
   });
 }
 
@@ -409,6 +441,39 @@ function renderResolved(resolved) {
 }
 
 // ── ŠUM ───────────────────────────────────────────────────────────────────────
+function syncNoise(noise) {
+  const ids = new Set(noise.map((n, i) => i));
+
+  // Ukloni nestale
+  for (const id of Object.keys(noiseMk)) {
+    if (!ids.has(parseInt(id))) { 
+      noiseMk[id].remove(); 
+      delete noiseMk[id]; 
+    }
+  }
+
+  noise.forEach((n, i) => {
+    const ll = [n.lat, n.lon];
+
+    if (!noiseMk[i]) {
+      const icon = L.divIcon({
+        html: `<div style="width:14px;height:14px;border-radius:50%;background:#9e4f4f;border:1px solid #c2606b;display:flex;align-items:center;justify-content:center;font-size:8px;color:#c2606b;font-weight:700">✗</div>`,
+        className:'', iconSize:[14,14], iconAnchor:[7,7]
+      });
+
+      const popupHtml = `<div class="p-title">Odbačena prijava</div>
+        <div class="p-row">Razlog: <b>${n.reason}</b></div>
+        <div class="p-row">Lat/Lon: <b>${n.lat.toFixed(4)}, ${n.lon.toFixed(4)}</b></div>`;
+
+      noiseMk[i] = L.marker(ll, { icon })
+        .bindPopup(popupHtml, { autoClose:false, closeOnClick:false })
+        .addTo(noiseLayer);
+    } else {
+      noiseMk[i].setLatLng(ll);
+    }
+  });
+}
+
 function renderNoise(noise) {
   const el = document.getElementById('noise-list');
   el.innerHTML = noise.length
@@ -452,8 +517,10 @@ function connect() {
     const d = JSON.parse(e.data);
     if (d.type !== 'update') return;
 
+    syncAllReports(d.all_reports || []);
     syncClusters(d.clusters   || []);
     syncIncidents(d.incidents || []);
+    syncNoise(d.noise         || []);
     syncVehicles(d.vehicles   || []);
     renderResolved(d.resolved || []);
     renderNoise(d.noise       || []);

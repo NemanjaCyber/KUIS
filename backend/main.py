@@ -33,9 +33,9 @@ def haversine(lat1, lon1, lat2, lon2):
 
 # ── Vozila ────────────────────────────────────────────────────────────────────
 vehicles = {
-    "V-101": {"id":"V-101","name":"Vozilo 1","lat":45.2555,"lon":19.8451,
+    "V-101": {"id":"V-101","name":"Vozilo 1","lat":43.3328,"lon":21.9050,
                "status":"STANDBY","mission":None,"route":[],"step":0},
-    "V-102": {"id":"V-102","name":"Vozilo 2","lat":45.2650,"lon":19.8200,
+    "V-102": {"id":"V-102","name":"Vozilo 2","lat":43.3250,"lon":21.8950,
                "status":"STANDBY","mission":None,"route":[],"step":0},
 }
 
@@ -76,7 +76,7 @@ def assign():
 
 async def move_vehicles():
     while True:
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.8)
 
         for v in vehicles.values():
 
@@ -87,8 +87,8 @@ async def move_vehicles():
                     v["mission"] = None
                     continue
 
-                # Pomeri 4 koraka po tick-u
-                for _ in range(4):
+                # Pomeri 2 koraka po tick-u (sporije nego pre)
+                for _ in range(2):
                     if v["step"] < len(route):
                         v["lat"] = route[v["step"]][0]
                         v["lon"] = route[v["step"]][1]
@@ -155,6 +155,7 @@ async def broadcast():
                 "clusters":  list(situation["clusters"].values()),
                 "incidents": list(situation["incidents"].values()),
                 "vehicles":  situation.get("vehicles", []),
+                "all_reports": situation.get("all_reports", []),
                 "resolved":  situation["resolved"],
                 "noise":     situation["noise_reports"],
                 "stats":     situation["stats"],

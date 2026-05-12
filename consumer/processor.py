@@ -13,9 +13,9 @@ CLUSTER_RADIUS_M   = 120   # prijave unutar 120m idu u isti klaster
 INCIDENT_THRESHOLD = 5     # klaster postaje incident na 5+ prijava
 CLUSTER_TTL_SEC    = 90    # klaster se brise ako nema novih prijava
 
-# Granice Novog Sada
-NS_LAT = (45.230, 45.285)
-NS_LON = (19.790, 19.890)
+# Granice Niša
+NS_LAT = (43.310, 43.355)
+NS_LON = (21.880, 21.930)
 
 # ── Shared state ──────────────────────────────────────────────────────────────
 _clusters  = {}   # interno - puni objekti sa listom prijava
@@ -24,6 +24,7 @@ _incidents = {}   # interno
 situation = {
     "clusters":          {},   # snapshot za frontend (bez liste prijava)
     "incidents":         {},
+    "all_reports":       [],   # sve prijave za prikaz na mapi
     "resolved":          [],   # lista resenih incidenata
     "noise_reports":     [],   # suma prijave
     "stats": {
@@ -74,7 +75,7 @@ def add_to_cluster(cid, report):
     return cl
 
 def new_cluster(report):
-    cid = f"CL-{situation['stats']['clusters'] + 1:03d}"
+    cid = f"INC-{situation['stats']['incidents'] + 1:03d}"
     situation["stats"]["clusters"] += 1
     _clusters[cid] = {
         "id":          cid,
@@ -231,6 +232,16 @@ def consume_reports():
             continue
 
         with lock:
+            # Dodaj sve prijave u all_reports za prikaz
+            situation["all_reports"].insert(0, {
+                "report_id": r.get("report_id"),
+                "lat": lat,
+                "lon": lon,
+                "timestamp": r.get("timestamp", datetime.utcnow().isoformat()),
+            })
+            # Čuva samo poslednje 100 prijava na mapi
+            situation["all_reports"] = situation["all_reports"][:100]
+            
             cid = find_cluster(lat, lon)
 
             if cid:
