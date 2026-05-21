@@ -75,7 +75,10 @@ def add_to_cluster(cid, report):
     return cl
 
 def new_cluster(report):
-    cid = f"INC-{situation['stats']['incidents'] + 1:03d}"
+    # KORISTIMO BROJ KLASTERA ZA ID (on je uvek jedinstven i raste), A NE BROJ INCIDENATA!
+    next_cluster_num = situation['stats']['clusters'] + 1
+    cid = f"INC-{next_cluster_num:03d}"
+    
     situation["stats"]["clusters"] += 1
     _clusters[cid] = {
         "id":          cid,
@@ -123,6 +126,7 @@ def try_verify(cid, producer):
     print(f"  [+] Incident {cid} verifikovan ({count} prijava)")
 
 # ── Reset (poziva backend kada vozilo resi incident) ──────────────────────────
+# 1. Izmjena u funkciji za rješavanje incidenta (dodato čišćenje prijava)
 def resolve_incident(incident_id, vehicle_name):
     """Backend poziva ovu funkciju kada vozilo stigne i resi incident."""
     with lock:
@@ -141,8 +145,10 @@ def resolve_incident(incident_id, vehicle_name):
             "resolved_by": vehicle_name,
             "report_count": inc["report_count"],
         })
-        # Max 20 resenih u listi
         situation["resolved"] = situation["resolved"][:20]
+
+        # [KLJUČNO] Ukloni sve pojedinačne zelene tačkice vezane za ovaj incident
+        situation["all_reports"] = [r for r in situation["all_reports"] if r.get("cluster_id") != incident_id]
 
         # Ocisti klaster i incident iz aktivnog state-a
         _clusters.pop(incident_id, None)
@@ -150,9 +156,10 @@ def resolve_incident(incident_id, vehicle_name):
         situation["clusters"].pop(incident_id, None)
         situation["incidents"].pop(incident_id, None)
 
-        print(f"  [✓] Incident {incident_id} resen od strane {vehicle_name}")
+        print(f"  [✓] Incident {incident_id} resen, očišćene pripadajuće prijave.")
 
 # ── TTL cleanup ───────────────────────────────────────────────────────────────
+# 2. Izmjena u TTL cleanup petlji (dodato čišćenje prijava za istekle klastere)
 def cleanup_loop():
     while True:
         time.sleep(20)
@@ -173,7 +180,6 @@ def cleanup_loop():
                 print(f"  [~] Klaster {cid} istekao ({n} prijava, TTL)")
                 if n < INCIDENT_THRESHOLD:
                     situation["stats"]["noise"] += n
-                    # Dodaj u noise listu
                     situation["noise_reports"].insert(0, {
                         "cluster_id":  cid,
                         "report_count": n,
@@ -183,6 +189,9 @@ def cleanup_loop():
                         "expired_at":  datetime.utcnow().isoformat(),
                     })
                     situation["noise_reports"] = situation["noise_reports"][:20]
+
+                # [KLJUČNO] Ako klaster istekne, brišemo i njegove zelene tačkice sa mape
+                situation["all_reports"] = [r for r in situation["all_reports"] if r.get("cluster_id") != cid]
 
                 del _clusters[cid]
                 situation["clusters"].pop(cid, None)
@@ -232,16 +241,7 @@ def consume_reports():
             continue
 
         with lock:
-            # Dodaj sve prijave u all_reports za prikaz
-            situation["all_reports"].insert(0, {
-                "report_id": r.get("report_id"),
-                "lat": lat,
-                "lon": lon,
-                "timestamp": r.get("timestamp", datetime.utcnow().isoformat()),
-            })
-            # Čuva samo poslednje 100 prijava na mapi
-            situation["all_reports"] = situation["all_reports"][:100]
-            
+            # 1. PRVO pronalazimo ili pravimo klaster da bismo definisali 'cid'
             cid = find_cluster(lat, lon)
 
             if cid:
@@ -251,11 +251,23 @@ def consume_reports():
                 cid = new_cluster(r)
                 tag = "novi"
 
+            # 2. TEK SADA, kada imamo 'cid', bezbedno dodajemo prijavu u all_reports
+            situation["all_reports"].insert(0, {
+                "report_id": r.get("report_id"),
+                "lat": lat,
+                "lon": lon,
+                "cluster_id": cid,   # Sada 'cid' sigurno postoji i ispravan je!
+                "timestamp": r.get("timestamp", datetime.utcnow().isoformat()),
+            })
+            
+            # Zadržavamo tvoj limit od 100 prijava na mapi (ili skini ako želiš sve da vidiš)
+            situation["all_reports"] = situation["all_reports"][:100]
+
             cl = _clusters[cid]
             count = len(cl["reports"])
             print(f"  [>] ({lat}, {lon}) -> {cid} ({tag}) | {count} prijava")
 
-            # Azuriraj snapshot
+            # Azuriraj snapshot za frontend
             situation["clusters"][cid] = {
                 "id":           cid,
                 "lat":          cl["lat"],
@@ -268,6 +280,7 @@ def consume_reports():
                 k: dict(v) for k, v in _incidents.items()
             }
 
+            # Pokušaj verifikaciju incidenta
             try_verify(cid, producer)
 
 def start():

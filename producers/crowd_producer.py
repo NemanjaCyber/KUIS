@@ -46,33 +46,36 @@ def main():
     while True:
         cycle += 1
 
-        # Svakih 4 ciklusa - promeni jedan hotspot
-        if cycle % 4 == 0:
+        # Svakih 6 ciklusa - promeni jedan hotspot (malo sporija fluktuacija)
+        if cycle % 6 == 0:
             idx = random.randrange(len(hotspots))
             hotspots[idx] = (
                 round(random.uniform(*NS_LAT), 6),
                 round(random.uniform(*NS_LON), 6)
             )
 
-        # Za svaki hotspot posalji 2-5 prijave sa malim offsetom (~50-100m)
-        for hs_lat, hs_lon in hotspots:
-            for _ in range(random.randint(2, 5)):
-                lat = round(hs_lat + random.uniform(-0.0007, 0.0007), 6)
-                lon = round(hs_lon + random.uniform(-0.0007, 0.0007), 6)
+        # Odaberi nasumično samo 1 do 3 hotspota za ovaj tick (prirodniji i sporiji ritam)
+        num_active = min(len(hotspots), random.randint(1, 3))
+        active_hotspots = random.sample(hotspots, num_active)
+
+        for hs_lat, hs_lon in active_hotspots:
+            # Šaljemo samo 1 do 2 prijave po izabranom hotspotu
+            for _ in range(random.randint(1, 2)):
+                lat = round(hs_lat + random.uniform(-0.0006, 0.0006), 6)
+                lon = round(hs_lon + random.uniform(-0.0006, 0.0006), 6)
                 producer.send(TOPIC, value=make_report(lat, lon))
 
-        # 1-2 sum prijave van granica
-        if random.random() < 0.4:
+        # Povremeno generiši šum van granica (smanjena vjerovatnoća na 20%)
+        if random.random() < 0.2:
             lat = round(random.uniform(*NOISE_LAT), 6)
             lon = round(random.uniform(*NOISE_LON), 6)
-            # Osiguraj da je van granica grada
             while in_city(lat, lon):
                 lat = round(random.uniform(*NOISE_LAT), 6)
                 lon = round(random.uniform(*NOISE_LON), 6)
             producer.send(TOPIC, value=make_report(lat, lon))
 
         producer.flush()
-        time.sleep(10)
+        time.sleep(12) # Povećano sa 10 na 12 sekundi za lakše praćenje
 
 if __name__ == "__main__":
     main()

@@ -269,29 +269,31 @@ function syncClusters(clusters) {
 
 // ── SVE PRIJAVE ────────────────────────────────────────────────────────────────
 function syncAllReports(reports) {
-  const ids = new Set(reports.map((r, i) => i));
+  // Kreiramo set jedinstvenih ID-jeva prijava koje su trenutno aktivne na backendu
+  const ids = new Set(reports.map(r => r.report_id));
 
-  // Ukloni nestale
+  // Ukloni sa mape sve tačkice koje više nisu u poslatom nizu (rešene ili istekle)
   for (const id of Object.keys(reportMk)) {
-    if (!ids.has(parseInt(id))) { 
+    if (!ids.has(id)) { 
       reportMk[id].remove(); 
       delete reportMk[id]; 
     }
   }
 
-  reports.forEach((r, i) => {
+  // Iscrtaj ili ažuriraj preostale tačkice koristeći njihov report_id kao ključ
+  reports.forEach(r => {
     const ll = [r.lat, r.lon];
+    const id = r.report_id;
 
-    if (!reportMk[i]) {
+    if (!reportMk[id]) {
       const icon = L.divIcon({
         html: `<div style="width:6px;height:6px;border-radius:50%;background:#66bb6a;border:none;opacity:0.7"></div>`,
         className:'', iconSize:[6,6], iconAnchor:[3,3]
       });
 
-      reportMk[i] = L.marker(ll, { icon })
-        .addTo(clLayer);
+      reportMk[id] = L.marker(ll, { icon }).addTo(clLayer);
     } else {
-      reportMk[i].setLatLng(ll);
+      reportMk[id].setLatLng(ll);
     }
   });
 }
@@ -441,35 +443,43 @@ function renderResolved(resolved) {
 }
 
 // ── ŠUM ───────────────────────────────────────────────────────────────────────
+// ── ŠUM ───────────────────────────────────────────────────────────────────────
 function syncNoise(noise) {
-  const ids = new Set(noise.map((n, i) => i));
+  // Kreiramo set jedinstvenih ID-jeva (koristimo jedinstveni report_id ili cluster_id umesto indeksa 'i')
+  const ids = new Set(noise.map(n => n.report_id || n.cluster_id));
 
-  // Ukloni nestale
+  // Ukloni sa mape sve markere koji više nisu u poslatom nizu sa bekenda
   for (const id of Object.keys(noiseMk)) {
-    if (!ids.has(parseInt(id))) { 
+    if (!ids.has(id)) { 
       noiseMk[id].remove(); 
       delete noiseMk[id]; 
     }
   }
 
-  noise.forEach((n, i) => {
+  noise.forEach(n => {
     const ll = [n.lat, n.lon];
+    const id = n.report_id || n.cluster_id;
 
-    if (!noiseMk[i]) {
+    if (!id) return; // Zaštita ukoliko objekat nema ID
+
+    const popupHtml = `<div class="p-title">Odbačena prijava</div>
+      <div class="p-row">Razlog: <b>${n.reason}</b></div>
+      <div class="p-row">Lat/Lon: <b>${n.lat.toFixed(4)}, ${n.lon.toFixed(4)}</b></div>`;
+
+    if (!noiseMk[id]) {
       const icon = L.divIcon({
         html: `<div style="width:14px;height:14px;border-radius:50%;background:#9e4f4f;border:1px solid #c2606b;display:flex;align-items:center;justify-content:center;font-size:8px;color:#c2606b;font-weight:700">✗</div>`,
         className:'', iconSize:[14,14], iconAnchor:[7,7]
       });
 
-      const popupHtml = `<div class="p-title">Odbačena prijava</div>
-        <div class="p-row">Razlog: <b>${n.reason}</b></div>
-        <div class="p-row">Lat/Lon: <b>${n.lat.toFixed(4)}, ${n.lon.toFixed(4)}</b></div>`;
-
-      noiseMk[i] = L.marker(ll, { icon })
+      // Pravimo novi marker vezan za njegov jedinstveni ID
+      noiseMk[id] = L.marker(ll, { icon })
         .bindPopup(popupHtml, { autoClose:false, closeOnClick:false })
         .addTo(noiseLayer);
     } else {
-      noiseMk[i].setLatLng(ll);
+      // Ako marker već postoji, samo mu ažuriramo poziciju i popup tekst u slučaju promena
+      noiseMk[id].setLatLng(ll);
+      noiseMk[id].getPopup()?.setContent(popupHtml);
     }
   });
 }
@@ -499,6 +509,9 @@ function renderStats(s) {
 
 // ── WEBSOCKET ─────────────────────────────────────────────────────────────────
 function connect() {
+
+  let currentReports = [];
+
   const ws = new WebSocket(`ws://${location.host}/ws`);
 
   ws.onopen = () => {
@@ -516,6 +529,8 @@ function connect() {
   ws.onmessage = e => {
     const d = JSON.parse(e.data);
     if (d.type !== 'update') return;
+
+    currentReports = d.all_reports || [];
 
     syncAllReports(d.all_reports || []);
     syncClusters(d.clusters   || []);
