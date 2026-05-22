@@ -4,14 +4,14 @@ import random
 from kafka import KafkaProducer
 from datetime import datetime
 
-KAFKA_BROKER = 'localhost:9092'
+KAFKA_BROKER = 'localhost:9092' 
 TOPIC = 'crowd-reports'
 
-# Granice Niša
+# Granice Niša (za generisanje prijava unutar grada)
 NS_LAT = (43.310, 43.355)
 NS_LON = (21.880, 21.930)
 
-# Povremeno se generise prijava van granica - sum (blizu grada)
+# Povremeno se generise prijava van granica grada - sum
 NOISE_LAT = (43.295, 43.370)
 NOISE_LON = (21.860, 21.945)
 
@@ -46,7 +46,7 @@ def main():
     while True:
         cycle += 1
 
-        # Svakih 6 ciklusa - promeni jedan hotspot (malo sporija fluktuacija)
+        # Svakih 6 ciklusa - promeni jedan hotspot
         if cycle % 6 == 0:
             idx = random.randrange(len(hotspots))
             hotspots[idx] = (
@@ -54,19 +54,19 @@ def main():
                 round(random.uniform(*NS_LON), 6)
             )
 
-        # Odaberi nasumično samo 1 do 3 hotspota za ovaj tick (prirodniji i sporiji ritam)
+        # Izaberemo 1 do 3 aktivna hotspota za ovaj ciklus
         num_active = min(len(hotspots), random.randint(1, 3))
         active_hotspots = random.sample(hotspots, num_active)
 
-        for hs_lat, hs_lon in active_hotspots:
+        for hs_lat, hs_lon in active_hotspots: # Za svaki izabrani hotspot
             # Šaljemo samo 1 do 2 prijave po izabranom hotspotu
             for _ in range(random.randint(1, 2)):
                 lat = round(hs_lat + random.uniform(-0.0006, 0.0006), 6)
                 lon = round(hs_lon + random.uniform(-0.0006, 0.0006), 6)
                 producer.send(TOPIC, value=make_report(lat, lon))
 
-        # Povremeno generiši šum van granica (smanjena vjerovatnoća na 20%)
-        if random.random() < 0.2:
+        # Povremeno generiši šum van granica
+        if random.random() < 0.2: # 20% šanse da se pojavi šum
             lat = round(random.uniform(*NOISE_LAT), 6)
             lon = round(random.uniform(*NOISE_LON), 6)
             while in_city(lat, lon):
@@ -75,7 +75,7 @@ def main():
             producer.send(TOPIC, value=make_report(lat, lon))
 
         producer.flush()
-        time.sleep(12) # Povećano sa 10 na 12 sekundi za lakše praćenje
+        time.sleep(12) # Pauza od 12 sekundi između ciklusa (prilagoditi po potrebi)
 
 if __name__ == "__main__":
     main()

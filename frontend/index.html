@@ -160,7 +160,7 @@
 <body>
 
 <header>
-  <div class="h-title">Komandno-Upravljački Informacioni Sistem</div>
+  <div class="h-title">KUIS</div>
   <div class="h-right">
     <span id="ts" style="color:#263547">—</span>
     <span><span class="dot" id="dot"></span><span id="clbl">Van mreže</span></span>
@@ -220,11 +220,11 @@ const noiseLayer = L.layerGroup().addTo(map);
 const vehLayer = L.layerGroup().addTo(map);
 
 // Marker references - nikad ne brisemo, samo azuriramo
-const clMk  = {};   // cluster markers
+const clMk  = {};   // klaster markers
 const incMk = {};   // incident markers
-const noiseMk = {}; // noise/sum markers
+const noiseMk = {}; // sum markers
 const reportMk = {}; // sve prijave
-const vehMk = {};   // vehicle markers
+const vehMk = {};   // vozila markers
 
 const VEH_COLOR = { 'V-101': '#4fc3f7', 'V-102': '#ce93d8' };
 
@@ -261,7 +261,7 @@ function syncClusters(clusters) {
     if (el) el.querySelector('div').textContent = c.report_count;
   });
 
-  // Ukloni verificirane klastere sa mape (oni postaju incidenti)
+  // Ukloni verifikovane klastere sa mape (oni postaju incidenti)
   clusters.filter(c => c.verified).forEach(c => {
     if (clMk[c.id]) { clMk[c.id].circle.remove(); clMk[c.id].dot.remove(); delete clMk[c.id]; }
   });
@@ -443,9 +443,8 @@ function renderResolved(resolved) {
 }
 
 // ── ŠUM ───────────────────────────────────────────────────────────────────────
-// ── ŠUM ───────────────────────────────────────────────────────────────────────
 function syncNoise(noise) {
-  // Kreiramo set jedinstvenih ID-jeva (koristimo jedinstveni report_id ili cluster_id umesto indeksa 'i')
+  // Kreiramo set jedinstvenih ID-jeva (koristimo jedinstveni report_id ili cluster_id)
   const ids = new Set(noise.map(n => n.report_id || n.cluster_id));
 
   // Ukloni sa mape sve markere koji više nisu u poslatom nizu sa bekenda

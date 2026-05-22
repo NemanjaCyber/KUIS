@@ -75,7 +75,7 @@ def add_to_cluster(cid, report):
     return cl
 
 def new_cluster(report):
-    # KORISTIMO BROJ KLASTERA ZA ID (on je uvek jedinstven i raste), A NE BROJ INCIDENATA!
+    # KORISTIMO BROJ KLASTERA ZA ID (on je uvek jedinstven i raste)
     next_cluster_num = situation['stats']['clusters'] + 1
     cid = f"INC-{next_cluster_num:03d}"
     
@@ -126,7 +126,6 @@ def try_verify(cid, producer):
     print(f"  [+] Incident {cid} verifikovan ({count} prijava)")
 
 # ── Reset (poziva backend kada vozilo resi incident) ──────────────────────────
-# 1. Izmjena u funkciji za rješavanje incidenta (dodato čišćenje prijava)
 def resolve_incident(incident_id, vehicle_name):
     """Backend poziva ovu funkciju kada vozilo stigne i resi incident."""
     with lock:
@@ -147,7 +146,7 @@ def resolve_incident(incident_id, vehicle_name):
         })
         situation["resolved"] = situation["resolved"][:20]
 
-        # [KLJUČNO] Ukloni sve pojedinačne zelene tačkice vezane za ovaj incident
+        # Ukloni sve pojedinačne zelene tačkice vezane za ovaj incident
         situation["all_reports"] = [r for r in situation["all_reports"] if r.get("cluster_id") != incident_id]
 
         # Ocisti klaster i incident iz aktivnog state-a
@@ -159,8 +158,8 @@ def resolve_incident(incident_id, vehicle_name):
         print(f"  [✓] Incident {incident_id} resen, očišćene pripadajuće prijave.")
 
 # ── TTL cleanup ───────────────────────────────────────────────────────────────
-# 2. Izmjena u TTL cleanup petlji (dodato čišćenje prijava za istekle klastere)
-def cleanup_loop():
+def cleanup_loop():# Ova funkcija se pokreće u posebnom threadu i periodično proverava da li neki klasteri nisu ažurirani duže od CLUSTER_TTL_SEC. 
+    #Ako pronađe takve klastere, briše ih i klasifikuje kao šum ako nisu dostigli threshold za incident.
     while True:
         time.sleep(20)
         now = datetime.now(timezone.utc)
@@ -190,7 +189,7 @@ def cleanup_loop():
                     })
                     situation["noise_reports"] = situation["noise_reports"][:20]
 
-                # [KLJUČNO] Ako klaster istekne, brišemo i njegove zelene tačkice sa mape
+                # Ako klaster istekne, brišemo i njegove zelene tačkice sa mape
                 situation["all_reports"] = [r for r in situation["all_reports"] if r.get("cluster_id") != cid]
 
                 del _clusters[cid]
@@ -200,7 +199,7 @@ def cleanup_loop():
                     situation["incidents"].pop(cid, None)
 
 # ── Glavni consumer ───────────────────────────────────────────────────────────
-def consume_reports():
+def consume_reports():#
     consumer = KafkaConsumer(
         INPUT_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
@@ -260,7 +259,7 @@ def consume_reports():
                 "timestamp": r.get("timestamp", datetime.utcnow().isoformat()),
             })
             
-            # Zadržavamo tvoj limit od 100 prijava na mapi (ili skini ako želiš sve da vidiš)
+            # limit od 100 prijava na mapi (ukloniti ako zelimo da vidimo sve)
             situation["all_reports"] = situation["all_reports"][:100]
 
             cl = _clusters[cid]

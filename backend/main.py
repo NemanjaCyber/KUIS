@@ -32,7 +32,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 # ── Vozila ────────────────────────────────────────────────────────────────────
-vehicles = {
+vehicles = { # vozila u STANDBY poziciji, spremna za kretanje
     "V-101": {"id":"V-101","name":"Vozilo 1","lat":43.3328,"lon":21.9050,
                "status":"STANDBY","mission":None,"route":[],"step":0},
     "V-102": {"id":"V-102","name":"Vozilo 2","lat":43.3250,"lon":21.8950,
@@ -50,7 +50,7 @@ def get_active_incidents():
 
 def assign():
     """Dodeli slobodna vozila nepokriverim incidentima.
-       Prioritet = veci broj prijava = vazi vise."""
+       Prioritet = veci broj prijava"""
     active = get_active_incidents()
     if not active:
         return
@@ -74,9 +74,9 @@ def assign():
         v.update({"status":"EN_ROUTE","mission":inc["id"],"route":route,"step":0})
         print(f"[Dispatch] {v['id']} -> {inc['id']} ({inc['report_count']} prijava)")
 
-async def move_vehicles():
+async def move_vehicles():# 
     while True:
-        await asyncio.sleep(0.8)
+        await asyncio.sleep(0.8) # 0.8 sekundi za sporije pomeranje i lakše praćenje
 
         for v in vehicles.values():
 
@@ -87,7 +87,7 @@ async def move_vehicles():
                     v["mission"] = None
                     continue
 
-                # Pomeri 2 koraka po tick-u (sporije nego pre)
+                # Pomeri 2 koraka po tick-u 
                 for _ in range(2):
                     if v["step"] < len(route):
                         v["lat"] = route[v["step"]][0]
@@ -170,6 +170,6 @@ async def broadcast():
             connected_clients.remove(ws)
 
 @app.on_event("startup")
-async def startup():
+async def startup():# Pokreni broadcast i simulaciju vozila paralelno
     asyncio.create_task(broadcast())
     asyncio.create_task(move_vehicles())
