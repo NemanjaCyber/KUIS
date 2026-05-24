@@ -4,18 +4,20 @@ import threading
 import time
 from kafka import KafkaConsumer, KafkaProducer
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 
-KAFKA_BROKER       = 'localhost:9092'
-INPUT_TOPIC        = 'crowd-reports'
-INCIDENT_TOPIC     = 'verified-incidents'
+import config
 
-CLUSTER_RADIUS_M   = 120   # prijave unutar 120m idu u isti klaster
-INCIDENT_THRESHOLD = 5     # klaster postaje incident na 5+ prijava
-CLUSTER_TTL_SEC    = 90    # klaster se brise ako nema novih prijava
+KAFKA_BROKER       = config.KAFKA_BROKER
+INPUT_TOPIC        = config.KAFKA_INPUT_TOPIC# Ulazni topic za prijave građana
+INCIDENT_TOPIC     = config.KAFKA_INCIDENT_TOPIC# Topic na koji se šalju verifikovani incidenti
 
-# Granice Niša
-NS_LAT = (43.310, 43.355)
-NS_LON = (21.880, 21.930)
+CLUSTER_RADIUS_M   = config.CLUSTER_RADIUS_M# Radijus klastera u metrima
+INCIDENT_THRESHOLD = config.INCIDENT_THRESHOLD# Minimalan broj prijava da bi se formirao incident
+CLUSTER_TTL_SEC    = config.CLUSTER_TTL_SEC# Vreme trajanja klastera pre nego što se obriše (ako nije verifikovan)
+
+NS_LAT = (float(config.NS_LAT_MIN), float(config.NS_LAT_MAX))
+NS_LON = (float(config.NS_LON_MIN), float(config.NS_LON_MAX))
 
 # ── Shared state ──────────────────────────────────────────────────────────────
 _clusters  = {}   # interno - puni objekti sa listom prijava
@@ -38,19 +40,19 @@ situation = {
 lock = threading.Lock()
 
 # ── Geo ───────────────────────────────────────────────────────────────────────
-def haversine(lat1, lon1, lat2, lon2):
+def haversine(lat1, lon1, lat2, lon2):# Funkcija za izračunavanje udaljenosti između dve geografske tačke koristeći Haversine formulu. Vraća udaljenost u metrima.
     R, p = 6371000, math.pi / 180
     a = (math.sin((lat2 - lat1) * p / 2) ** 2 +
          math.cos(lat1 * p) * math.cos(lat2 * p) *
          math.sin((lon2 - lon1) * p / 2) ** 2)
     return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-def centroid(reports):
+def centroid(reports):# Funkcija za izračunavanje geometrijskog centra (centroida) skupa prijava. Vraća latitudu i longitudu centra, zaokružene na 6 decimala.
     lat = sum(r["lat"] for r in reports) / len(reports)
     lon = sum(r["lon"] for r in reports) / len(reports)
     return round(lat, 6), round(lon, 6)
 
-def in_city(lat, lon):
+def in_city(lat, lon):# 
     return (NS_LAT[0] <= lat <= NS_LAT[1] and
             NS_LON[0] <= lon <= NS_LON[1])
 
@@ -226,7 +228,7 @@ def consume_reports():#
         if lat is None or lon is None:
             continue
 
-        # Filtriranje suma - van granica grada
+        # Provera da li je prijava van granica grada - ako jeste, klasifikujemo kao šum i ne obrađujemo dalje
         if not in_city(lat, lon):
             situation["stats"]["noise"] += 1
             situation["noise_reports"].insert(0, {

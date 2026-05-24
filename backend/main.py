@@ -4,6 +4,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json, asyncio, threading, requests, math
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv
+
+import config
 
 from consumer.processor import situation, lock, start as start_processor, resolve_incident
 
@@ -11,9 +14,14 @@ app = FastAPI()
 threading.Thread(target=start_processor, daemon=True).start()
 connected_clients = []
 
+OSRM_URL = config.OSRM_URL
+SCENE_WAIT_SEC = config.SCENE_WAIT_SEC
+VEHICLE_MOVE_INTERVAL = config.VEHICLE_MOVE_INTERVAL
+BROADCAST_INTERVAL = config.BROADCAST_INTERVAL
+
 # ── OSRM ─────────────────────────────────────────────────────────────────────
 def get_route(slat, slon, elat, elon):
-    url = (f"http://router.project-osrm.org/route/v1/driving/"
+    url = (f"{OSRM_URL}"
            f"{slon},{slat};{elon},{elat}"
            f"?overview=full&geometries=geojson")
     try:
@@ -38,8 +46,6 @@ vehicles = { # vozila u STANDBY poziciji, spremna za kretanje
     "V-102": {"id":"V-102","name":"Vozilo 2","lat":43.3250,"lon":21.8950,
                "status":"STANDBY","mission":None,"route":[],"step":0},
 }
-
-SCENE_WAIT_SEC = 5   # sekundi cekanja na mestu incidenta
 
 def get_active_incidents():
     with lock:
@@ -76,7 +82,7 @@ def assign():
 
 async def move_vehicles():# 
     while True:
-        await asyncio.sleep(0.8) # 0.8 sekundi za sporije pomeranje i lakše praćenje
+        await asyncio.sleep(VEHICLE_MOVE_INTERVAL) # Brzina pomeranja definisana u .env
 
         for v in vehicles.values():
 
@@ -146,7 +152,7 @@ async def ws_endpoint(websocket: WebSocket):
 
 async def broadcast():
     while True:
-        await asyncio.sleep(1.2)
+        await asyncio.sleep(BROADCAST_INTERVAL) # Interval slanja snapshot-a
         if not connected_clients:
             continue
         with lock:
