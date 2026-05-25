@@ -36,7 +36,15 @@ Ovo je prototip komandno‑upravljackog informacionog sistema (KUIS) za detekcij
 
 ## Bitni fajlovi, parametri i gde se nalaze
 
-1) - consumer/processor.py
+1) - producers/crowd_producer.py
+   - Opis: generator simuliranih prijava. Pokreće KafkaProducer i šalje poruke na topic `crowd-reports`.
+   - Glavne promenljive: KAFKA_BROKER, TOPIC, NS_LAT, NS_LON, NOISE_LAT, NOISE_LON, sleep interval.
+   - Funkcije:
+    - in_city(lat, lon): vraća True ako je tačka unutar NS_LAT/NS_LON bounding box-a.
+    - make_report(lat, lon): pravi JSON objekt prijave sa report_id, lat, lon, timestamp.
+    - main(): postavlja KafkaProducer, pravi skup 'hotspot' tačaka i u petlji šalje 1-2 prijave po aktivnom hotspotu, povremeno generiše 'noise' izvan opsega grada. `time.sleep(12)` kontroliše tempo. Promena 'hotspot' logike ili intervala menja stopu i raspodelu prijava.
+
+2) - consumer/processor.py
    - Opis: srce logike za klasterizaciju i verifikaciju. Konzumira poruke sa `crowd-reports`, održava in-memory state `situation`, i  kad klaster postane incident emituje događaj na `verified-incidents`.
    - Ključne globalne strukture:
     - _clusters: mapiranje id->klaster objekat (s listom prijava, centroidom, timestampima)
@@ -61,14 +69,6 @@ Uticaj promena:
 - Smanjenje INCIDENT_THRESHOLD dovodi do ranije verifikacije (više incidenata).
 - Smanjenje CLUSTER_TTL_SEC briše klaster brže -> više prijava klasifikovanih kao šum.
 
-2) - producers/crowd_producer.py
-   - Opis: generator simuliranih prijava. Pokreće KafkaProducer i šalje poruke na topic `crowd-reports`.
-   - Glavne promenljive: KAFKA_BROKER, TOPIC, NS_LAT, NS_LON, NOISE_LAT, NOISE_LON, sleep interval.
-   - Funkcije:
-    - in_city(lat, lon): vraća True ako je tačka unutar NS_LAT/NS_LON bounding box-a.
-    - make_report(lat, lon): pravi JSON objekt prijave sa report_id, lat, lon, timestamp.
-    - main(): postavlja KafkaProducer, pravi skup 'hotspot' tačaka i u petlji šalje 1-2 prijave po aktivnom hotspotu, povremeno generiše 'noise' izvan opsega grada. `time.sleep(12)` kontroliše tempo. Promena 'hotspot' logike ili intervala menja stopu i raspodelu prijava.
-
 3) - backend/main.py
    - Opis: FastAPI servis koji služi frontend i upravlja simulacijom vozila. Importovanjem pokreće consumer.processor.start() u zasebnoj niti.
    - Glavne strukture:
@@ -85,10 +85,10 @@ Uticaj promena:
     - async broadcast(): svake ~1.2s pravi JSON snapshot `type:'update'` i šalje svim connected_clients.
 
 4) - frontend/index.html
-   - Opis: single-file SPA sa Leaflet mapom i UI panelima. Spaja se na `ws://<host>/ws` i dobija periodične snapshot-e.
+   - Opis: single-file SPA sa Leaflet mapom i UI panelima. Spaja se na `ws://<host>/ws` i dobija periodične snapshotove.
    - Ključne komponente:
     - Map setup: base layer, start view, četiri LayerGroup-a (klasteri, incidenti, šum, vozila).
-    - Marker management pattern: vidi `clMk`, `incMk`, `reportMk`, `vehMk`. Marker objekti se ne kreiraju/brisu često — umesto toga se ažuriraju da bi animacije bile glatkije i da se izbegne flicker.
+    - Marker management pattern: `clMk`, `incMk`, `reportMk`, `vehMk`. Marker objekti se ne kreiraju/brisu često — umesto toga se ažuriraju da bi animacije bile glatkije i da se izbegne flicker.
     - Važne JS funkcije:
       - syncClusters(clusters): ažurira/kreira krugove i marker-e za ne‑verifikovane klastere; uklanja verifikovane.
       - syncAllReports(reports): sinhronizuje pojedinačne prijave (male zelene tačkice); uklanja prijave koje su rešene ili istekle.
@@ -154,7 +154,7 @@ Kada se aplikacija otvori u browseru, korisnik ima kompletan pregled situacije u
 - Ikone vozila: Prikazuju interventne jedinice u realnom vremenu. Vozilo pulsira kada je u pokretu ka lokaciji.
 
 ### Interakcija sa sistemom:
-- Automatsko ažuriranje: Korisnik nema potrebe da osvežava stranicu (No-Refresh SPA), jer WebSocket klijent konstantno osluškuje promene stanja i ažurira Leaflet slojeve bez treperenja (flicker) ekrana.
+- Automatsko ažuriranje: Korisnik nema potrebe da osvežava stranicu, jer WebSocket klijent konstantno osluškuje promene stanja i ažurira Leaflet slojeve bez treperenja ekrana.
 
 ## Ključne promenljive i šta znače
 - cluster vs incident: klaster = privremena grupa prijava; incident = verifikovan klaster (dostigao threshold).
@@ -169,12 +169,6 @@ Kada se aplikacija otvori u browseru, korisnik ima kompletan pregled situacije u
 - Smanjiti CLUSTER_TTL_SEC sa 90 na 30 → klasteri brže ističu i više prijava ide u `noise_reports`.
 - Povećati `time.sleep` u produceru → manja brzina generisanja prijava.
 - Dodavanje vozila: izmeniti `vehicles` dict u backend/main.py i restartovati backend.
-
-## Preporuke za dalje (developer notes)
-- Externalizovati konfiguraciju u `.env` ili config fajl (trenutno su konstante u kodu).
-- Persistirati verifikovane incidente u bazu podataka (trenutno se šalju na Kafka topic `verified-incidents`).
-- Dodati autentikaciju i autorizaciju za backend i WS u produkciji.
-- Podeliti consumer i backend u zasebne servisne jedinice za lakše skaliranje.
 
 ---
 

@@ -20,7 +20,7 @@ VEHICLE_MOVE_INTERVAL = config.VEHICLE_MOVE_INTERVAL
 BROADCAST_INTERVAL = config.BROADCAST_INTERVAL
 
 # ── OSRM ─────────────────────────────────────────────────────────────────────
-def get_route(slat, slon, elat, elon):
+def get_route(slat, slon, elat, elon):# 
     url = (f"{OSRM_URL}"
            f"{slon},{slat};{elon},{elat}"
            f"?overview=full&geometries=geojson")
@@ -47,16 +47,14 @@ vehicles = { # vozila u STANDBY poziciji, spremna za kretanje
                "status":"STANDBY","mission":None,"route":[],"step":0},
 }
 
-def get_active_incidents():
+def get_active_incidents():# Vraća sve aktivne incidente iz situacije. Koristi se u funkciji assign() da bi se dodelila vozila incidentima.
     with lock:
         return {
             k: v for k, v in situation["incidents"].items()
             if v["status"] == "ACTIVE"
         }
 
-def assign():
-    """Dodeli slobodna vozila nepokriverim incidentima.
-       Prioritet = veci broj prijava"""
+def assign():# Dodeli slobodna vozila nepokriverim incidentima. Prioritet = veci broj prijava
     active = get_active_incidents()
     if not active:
         return
@@ -80,13 +78,13 @@ def assign():
         v.update({"status":"EN_ROUTE","mission":inc["id"],"route":route,"step":0})
         print(f"[Dispatch] {v['id']} -> {inc['id']} ({inc['report_count']} prijava)")
 
-async def move_vehicles():# 
+async def move_vehicles():
     while True:
-        await asyncio.sleep(VEHICLE_MOVE_INTERVAL) # Brzina pomeranja definisana u .env
+        await asyncio.sleep(VEHICLE_MOVE_INTERVAL) # Brzina pomicanja vozila - vreme između "koraka" u kojima se vozila pomeraju duž rute
 
         for v in vehicles.values():
 
-            if v["status"] == "EN_ROUTE":
+            if v["status"] == "EN_ROUTE":# 
                 route, step = v["route"], v["step"]
                 if not route:
                     v["status"] = "STANDBY"
@@ -117,10 +115,10 @@ async def move_vehicles():#
                     v.update({"status":"STANDBY","mission":None,"route":[],"step":0})
                     print(f"[Vehicle] {v['id']} zavrsio, prelazi u STANDBY")
 
-        assign()
+        assign()# Nakon pomeranja vozila, pokušaj dodeliti slobodna vozila incidentima koji još nisu pokriveni. Ovo omogućava da se vozila dinamički dodeljuju novim incidentima čim završe prethodne zadatke.
 
         # Sync u situation za broadcast
-        with lock:
+        with lock:# 
             situation["vehicles"] = [
                 {
                     "id":     v["id"],
@@ -135,11 +133,11 @@ async def move_vehicles():#
 
 # ── HTTP / WS ─────────────────────────────────────────────────────────────────
 @app.get("/")
-async def root():
+async def root():# 
     with open("frontend/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
-@app.websocket("/ws")
+@app.websocket("/ws")# 
 async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     connected_clients.append(websocket)
@@ -150,12 +148,12 @@ async def ws_endpoint(websocket: WebSocket):
         if websocket in connected_clients:
             connected_clients.remove(websocket)
 
-async def broadcast():
+async def broadcast():# Ova funkcija se pokreće u posebnoj asinhronoj task-u i periodično šalje snapshot trenutne situacije svim povezanim klijentima preko WebSocket-a.
     while True:
         await asyncio.sleep(BROADCAST_INTERVAL) # Interval slanja snapshot-a
         if not connected_clients:
             continue
-        with lock:
+        with lock:# Kreiraj snapshot situacije koji se šalje klijentima. Sadrži sve klastere, incidente, vozila, prijave, rešene incidente, šum i statistiku.
             payload = json.dumps({
                 "type":      "update",
                 "clusters":  list(situation["clusters"].values()),
@@ -175,7 +173,7 @@ async def broadcast():
         for ws in dead:
             connected_clients.remove(ws)
 
-@app.on_event("startup")
-async def startup():# Pokreni broadcast i simulaciju vozila paralelno
+@app.on_event("startup")# Ova funkcija se pokreće kada FastAPI aplikacija startuje. Pokreće broadcast i simulaciju vozila paralelno.
+async def startup():
     asyncio.create_task(broadcast())
     asyncio.create_task(move_vehicles())

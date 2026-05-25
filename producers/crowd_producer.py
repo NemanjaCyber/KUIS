@@ -20,11 +20,11 @@ NOISE_LON = (float(config.NOISE_LON_MIN), float(config.NOISE_LON_MAX))
 
 PRODUCER_SLEEP_SEC = float(config.PRODUCER_SLEEP_SEC)
 
-def in_city(lat, lon):
+def in_city(lat, lon):# Provera da li su koordinate unutar granica grada
     return (NS_LAT[0] <= lat <= NS_LAT[1] and
             NS_LON[0] <= lon <= NS_LON[1])
 
-def make_report(lat, lon):
+def make_report(lat, lon):# Generisanje prijave sa jedinstvenim ID-jem, koordinatama i vremenom
     return {
         "report_id": f"R-{random.randint(10000, 99999)}",
         "lat":       round(lat, 6),
@@ -40,7 +40,7 @@ def main():
     )
     print("[Producer] Pokrenut.")
 
-    # 4-7 aktivnih tacaka oko kojih se grupisu prijave
+    # 4-7 aktivnih tacaka (hotspotova) oko kojih se grupisu prijave
     hotspots = [
         (round(random.uniform(*NS_LAT), 6),
          round(random.uniform(*NS_LON), 6))
@@ -59,7 +59,7 @@ def main():
                 round(random.uniform(*NS_LON), 6)
             )
 
-        # Izaberemo 1 do 3 aktivna hotspota za ovaj ciklus
+        # Izaberemo 1 do 3 aktivna hotspota za trenutni ciklus
         num_active = min(len(hotspots), random.randint(1, 3))
         active_hotspots = random.sample(hotspots, num_active)
 
@@ -70,11 +70,11 @@ def main():
                 lon = round(hs_lon + random.uniform(-0.0006, 0.0006), 6)
                 producer.send(TOPIC, value=make_report(lat, lon))
 
-        # Povremeno generiši šum van granica
+        # Povremeno generiši šum van granica grada
         if random.random() < 0.2: # 20% šanse da se pojavi šum
             lat = round(random.uniform(*NOISE_LAT), 6)
             lon = round(random.uniform(*NOISE_LON), 6)
-            while in_city(lat, lon):# 
+            while in_city(lat, lon):
                 lat = round(random.uniform(*NOISE_LAT), 6)
                 lon = round(random.uniform(*NOISE_LON), 6)
             producer.send(TOPIC, value=make_report(lat, lon))

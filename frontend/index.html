@@ -507,12 +507,11 @@ function renderStats(s) {
 }
 
 // ── WEBSOCKET ─────────────────────────────────────────────────────────────────
-function connect() {
+function connect() {// 
 
   let currentReports = [];
 
-  const ws = new WebSocket(`ws://${location.host}/ws`);
-
+  const ws = new WebSocket(`ws://${location.host}/ws`);// Kreiramo WebSocket konekciju ka backendu. 
   ws.onopen = () => {
     document.getElementById('dot').classList.add('live');
     document.getElementById('clbl').textContent = 'Uživo';
@@ -525,7 +524,7 @@ function connect() {
   };
   ws.onerror = () => ws.close();
 
-  ws.onmessage = e => {
+  ws.onmessage = e => {// 
     const d = JSON.parse(e.data);
     if (d.type !== 'update') return;
 

@@ -25,7 +25,7 @@ _incidents = {}   # interno
 
 situation = {
     "clusters":          {},   # snapshot za frontend (bez liste prijava)
-    "incidents":         {},
+    "incidents":         {},   # lista incidenata
     "all_reports":       [],   # sve prijave za prikaz na mapi
     "resolved":          [],   # lista resenih incidenata
     "noise_reports":     [],   # suma prijave
@@ -57,8 +57,7 @@ def in_city(lat, lon):#
             NS_LON[0] <= lon <= NS_LON[1])
 
 # ── Klasterizacija ────────────────────────────────────────────────────────────
-def find_cluster(lat, lon):
-    """Vraca ID najblizeg klastera unutar radijusa, ili None."""
+def find_cluster(lat, lon):# Vraca ID najblizeg klastera unutar radijusa, ili None.
     best, best_dist = None, float('inf')
     for cid, cl in _clusters.items():
         d = haversine(lat, lon, cl["lat"], cl["lon"])
@@ -66,7 +65,7 @@ def find_cluster(lat, lon):
             best, best_dist = cid, d
     return best
 
-def add_to_cluster(cid, report):
+def add_to_cluster(cid, report):# Dodaje prijavu u klaster i azurira centar klastera.
     cl = _clusters[cid]
     cl["reports"].append(report)
     cl["last_update"] = datetime.utcnow().isoformat()
@@ -76,8 +75,7 @@ def add_to_cluster(cid, report):
     cl["lon"] = lon
     return cl
 
-def new_cluster(report):
-    # KORISTIMO BROJ KLASTERA ZA ID (on je uvek jedinstven i raste)
+def new_cluster(report):# Kreira novi klaster sa ovom prijavom. ID klastera se formira na osnovu broja postojećih klastera, što garantuje jedinstvenost i rastući ID.
     next_cluster_num = situation['stats']['clusters'] + 1
     cid = f"INC-{next_cluster_num:03d}"
     
@@ -94,7 +92,7 @@ def new_cluster(report):
     return cid
 
 # ── Validacija ────────────────────────────────────────────────────────────────
-def try_verify(cid, producer):
+def try_verify(cid, producer):# Pokušava da verifikuje klaster kao incident. Ako broj prijava u klasteru dostigne threshold, klaster se klasifikuje kao incident i šalje na INCIDENT_TOPIC.
     cl = _clusters[cid]
     count = len(cl["reports"])
 
@@ -128,8 +126,7 @@ def try_verify(cid, producer):
     print(f"  [+] Incident {cid} verifikovan ({count} prijava)")
 
 # ── Reset (poziva backend kada vozilo resi incident) ──────────────────────────
-def resolve_incident(incident_id, vehicle_name):
-    """Backend poziva ovu funkciju kada vozilo stigne i resi incident."""
+def resolve_incident(incident_id, vehicle_name):# Backend poziva ovu funkciju kada vozilo stigne i resi incident.
     with lock:
         inc = _incidents.get(incident_id)
         if not inc:
@@ -157,7 +154,7 @@ def resolve_incident(incident_id, vehicle_name):
         situation["clusters"].pop(incident_id, None)
         situation["incidents"].pop(incident_id, None)
 
-        print(f"  [✓] Incident {incident_id} resen, očišćene pripadajuće prijave.")
+        print(f"  Incident {incident_id} resen, očišćene pripadajuće prijave.")
 
 # ── TTL cleanup ───────────────────────────────────────────────────────────────
 def cleanup_loop():# Ova funkcija se pokreće u posebnom threadu i periodično proverava da li neki klasteri nisu ažurirani duže od CLUSTER_TTL_SEC. 
@@ -201,7 +198,7 @@ def cleanup_loop():# Ova funkcija se pokreće u posebnom threadu i periodično p
                     situation["incidents"].pop(cid, None)
 
 # ── Glavni consumer ───────────────────────────────────────────────────────────
-def consume_reports():#
+def consume_reports():# Glavna funkcija koja pokreće Kafka consumer koji sluša na INPUT_TOPIC. Za svaku primljenu prijavu, proverava da li je unutar granica grada, zatim pokušava da je doda u postojeći klaster ili kreira novi klaster. Nakon toga, pokušava da verifikuje klaster kao incident.
     consumer = KafkaConsumer(
         INPUT_TOPIC,
         bootstrap_servers=KAFKA_BROKER,
