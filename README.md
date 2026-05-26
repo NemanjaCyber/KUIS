@@ -8,6 +8,8 @@ Ovo je prototip komandno‑upravljackog informacionog sistema (KUIS) za detekcij
 - Frontend: statična SPA (Leaflet) koja prikazuje mape, klastere, incidente, vozila.
 - Kafka stack (Zookeeper + Kafka + Kafka UI) u docker‑compose.yml.
 
+<img src="Screenshot_10.png" width="200" height="100">
+
 ## Tehnologije
 - Python (FastAPI, uvicorn)
 - kafka-python
